@@ -31,6 +31,7 @@
       <button class="tab-btn active" onclick="switchTab('users', this)">Kullanıcılar</button>
       <button class="tab-btn" onclick="switchTab('draft', this)">Draft Yönetimi</button>
       <button class="tab-btn" onclick="switchTab('tournament', this)">Turnuva</button>
+      <button class="tab-btn" onclick="switchTab('bets', this)">Bahisler</button>
     </div>
 
     <!-- Users Tab -->
@@ -101,6 +102,32 @@
       </div>
     </div>
 
+    <!-- Bets Tab -->
+    <div class="tab-content" id="tab-bets">
+      <div class="card" style="padding:0">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <h3 style="font-weight:600">Tüm Bahisler</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadBets()">🔄 Yenile</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kullanıcı</th>
+                <th>Takım</th>
+                <th>Miktar</th>
+                <th>Potansiyel Kazanç</th>
+                <th>Durum</th>
+                <th>Tarih</th>
+                <th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody id="bets-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- Tournament Tab -->
     <div class="tab-content" id="tab-tournament">
       <div class="tournament-status" id="tournament-status"></div>
@@ -130,6 +157,24 @@
       </div>
     </div>
   </main>
+
+  <!-- Coin Modal -->
+  <div id="coin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
+    <div class="card" style="width:340px;padding:1.5rem;position:relative">
+      <button onclick="closeCoinModal()" style="position:absolute;top:0.75rem;right:1rem;background:none;border:none;color:var(--text-muted);font-size:1.25rem;cursor:pointer">✕</button>
+      <h3 style="font-weight:600;margin-bottom:0.25rem">Coin Düzenle</h3>
+      <div id="coin-modal-name" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem"></div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.6rem 1rem;margin-bottom:1rem;font-size:0.85rem">
+        Mevcut bakiye: <strong id="coin-modal-balance" style="color:var(--gold)"></strong>
+      </div>
+      <div class="form-group" style="margin-bottom:0.75rem">
+        <label style="font-size:0.85rem">Miktar (pozitif = ekle, negatif = çıkar)</label>
+        <input type="number" id="coin-amount-input" placeholder="örn: 500 veya -200" style="width:100%;margin-top:0.4rem">
+      </div>
+      <div id="coin-modal-err" class="error-msg" style="margin-bottom:0.5rem"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="confirmCoinEdit()">Onayla</button>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
   <script>
@@ -161,8 +206,9 @@
           <td>🪙 ${Number(u.balance).toLocaleString()}</td>
           <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : ''}</td>
           <td style="display:flex;gap:0.5rem;flex-wrap:wrap">
-            ${u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="resetTeam(${u.id}, '${u.display_name}')">Takımı Sıfırla</button>` : ''}
-            ${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${u.display_name}')">Sil</button>` : ''}
+            ${!u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="openCoinModal(${u.id}, '${u.display_name.replace(/'/g, "\\'")}', ${u.balance})">Coin Düzenle</button>` : ''}
+            ${u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="resetTeam(${u.id}, '${u.display_name.replace(/'/g, "\\'")}')">Takımı Sıfırla</button>` : ''}
+            ${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${u.display_name.replace(/'/g, "\\'")}')">Sil</button>` : ''}
           </td>
         </tr>
       `).join('');
@@ -265,6 +311,86 @@
       btn.classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
       if (tab === 'draft') loadDraftStatus();
+      if (tab === 'bets') loadBets();
+    }
+
+    // ── COIN MODAL ───────────────────────────────────────────────
+    let coinModalUserId = null;
+
+    function openCoinModal(userId, name, balance) {
+      coinModalUserId = userId;
+      document.getElementById('coin-modal-name').textContent = name;
+      document.getElementById('coin-modal-balance').textContent = `🪙 ${Number(balance).toLocaleString()} coin`;
+      document.getElementById('coin-amount-input').value = '';
+      document.getElementById('coin-modal-err').textContent = '';
+      const modal = document.getElementById('coin-modal');
+      modal.style.display = 'flex';
+    }
+
+    function closeCoinModal() {
+      document.getElementById('coin-modal').style.display = 'none';
+      coinModalUserId = null;
+    }
+
+    async function confirmCoinEdit() {
+      const amount = parseFloat(document.getElementById('coin-amount-input').value);
+      const err = document.getElementById('coin-modal-err');
+      err.textContent = '';
+      if (isNaN(amount) || amount === 0) {
+        err.textContent = 'Geçerli bir miktar girin (0 olamaz)';
+        return;
+      }
+      const data = await apiPost(`/api/admin/users/${coinModalUserId}/balance`, { amount });
+      if (data?.success) {
+        closeCoinModal();
+        await loadUsers();
+      } else {
+        err.textContent = data?.error || 'Hata oluştu';
+      }
+    }
+
+    document.getElementById('coin-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeCoinModal();
+    });
+
+    // ── BETS TAB ─────────────────────────────────────────────────
+    async function loadBets() {
+      const data = await apiGet('/api/bets/all');
+      if (!data?.success) return;
+      const tbody = document.getElementById('bets-table');
+      if (!data.data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:2rem">Henüz bahis yok</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(b => {
+        const date = new Date(b.placed_at).toLocaleDateString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+        const statusMap = { pending: '<span class="badge badge-yellow">Bekliyor</span>', won: '<span class="badge badge-green">Kazandı</span>', lost: '<span class="badge badge-red">Kaybetti</span>' };
+        return `
+          <tr>
+            <td>
+              <div style="font-weight:600">${b.display_name}</div>
+              <div style="color:var(--text-muted);font-size:0.75rem">@${b.username}</div>
+            </td>
+            <td>${b.flag_emoji} ${b.team_name}</td>
+            <td>🪙 ${Number(b.amount).toLocaleString()}</td>
+            <td>🪙 ${Number(b.potential_payout).toLocaleString()}</td>
+            <td>${statusMap[b.status] || b.status}</td>
+            <td style="font-size:0.8rem;color:var(--text-muted)">${date}</td>
+            <td>${b.status === 'pending' ? `<button class="btn btn-danger btn-sm" onclick="cancelBet(${b.id})">İptal Et</button>` : '—'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function cancelBet(betId) {
+      if (!confirm('Bu bahis iptal edilsin mi? Kullanıcıya coin iade edilecek.')) return;
+      const res = await fetch(`/api/admin/bets/${betId}`, { method: 'DELETE', credentials: 'include' });
+      const data = await res.json();
+      if (data?.success) {
+        await loadBets();
+      } else {
+        alert(data?.error || 'Bahis iptal edilirken hata oluştu');
+      }
     }
 
     // ── DRAFT FUNCTIONS ──────────────────────────────────────────

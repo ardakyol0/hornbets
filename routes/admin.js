@@ -46,8 +46,7 @@ router.post('/tournament', requireAuth, requireAdmin, async (req, res) => {
       if (!teamRows.length) return res.json({ success: false, error: 'Takım bulunamadı' });
 
       await query('UPDATE tournament SET status = $1, winner_team_id = $2 WHERE id = 1', [status, winner_team_id]);
-      await query("UPDATE bets SET status = 'lost' WHERE status = 'pending'");
-      await query("UPDATE bets SET status = 'won' WHERE status = 'lost' AND team_id = $1", [winner_team_id]);
+      await query("UPDATE bets SET status = CASE WHEN team_id = $1 THEN 'won' ELSE 'lost' END WHERE status = 'pending'", [winner_team_id]);
 
       const { rows: winBets } = await query("SELECT * FROM bets WHERE team_id = $1 AND status = 'won'", [winner_team_id]);
       for (const bet of winBets) {
@@ -108,13 +107,51 @@ router.post('/reset-team', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.post('/users/:id/balance', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const { amount } = req.body;
+    if (amount === undefined || amount === null || isNaN(Number(amount))) {
+      return res.json({ success: false, error: 'Geçerli bir miktar girin' });
+    }
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [targetId]);
+    if (!rows.length) return res.json({ success: false, error: 'Kullanıcı bulunamadı' });
+    if (rows[0].is_admin) return res.status(403).json({ success: false, error: 'Admin bakiyesi değiştirilemez' });
+    const newBalance = rows[0].balance + Number(amount);
+    if (newBalance < 0) return res.json({ success: false, error: 'Bakiye 0\'ın altına düşemez' });
+    const { rows: updated } = await query(
+      'UPDATE users SET balance = $1 WHERE id = $2 RETURNING id, display_name, balance',
+      [newBalance, targetId]
+    );
+    res.json({ success: true, data: updated[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
+router.delete('/bets/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const betId = parseInt(req.params.id);
+    const { rows } = await query('SELECT * FROM bets WHERE id = $1', [betId]);
+    if (!rows.length) return res.json({ success: false, error: 'Bahis bulunamadı' });
+    if (rows[0].status !== 'pending') return res.json({ success: false, error: 'Yalnızca bekleyen bahisler iptal edilebilir' });
+    await query('UPDATE users SET balance = balance + $1 WHERE id = $2', [rows[0].amount, rows[0].user_id]);
+    await query('DELETE FROM bets WHERE id = $1', [betId]);
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
 router.get('/tournament', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM tournament WHERE id = 1');
     res.json({ success: true, data: rows[0] });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ success: false, error: 'Sunuva hatası' });
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
   }
 });
 
