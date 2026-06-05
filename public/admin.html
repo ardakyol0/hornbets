@@ -159,8 +159,9 @@
           <td>${u.team_name ? `${u.flag_emoji} ${u.team_name} ${tierBadge(u.tier)}` : '<span style="color:var(--text-muted)">Takım yok</span>'}</td>
           <td>🪙 ${Number(u.balance).toLocaleString()}</td>
           <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : ''}</td>
-          <td>
+          <td style="display:flex;gap:0.5rem;flex-wrap:wrap">
             ${u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="resetTeam(${u.id}, '${u.display_name}')">Takımı Sıfırla</button>` : ''}
+            ${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${u.display_name}')">Sil</button>` : ''}
           </td>
         </tr>
       `).join('');
@@ -233,6 +234,17 @@
         await loadUsers();
       } else {
         err.textContent = data?.error || 'Hata oluştu';
+      }
+    }
+
+    async function deleteUser(userId, name) {
+      if (!confirm(`Bu kullanıcıyı silmek istediğinden emin misin?\n\n${name}`)) return;
+      const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE', credentials: 'include' });
+      const data = await res.json();
+      if (data?.success) {
+        await loadUsers();
+      } else {
+        alert(data?.error || 'Kullanıcı silinirken hata oluştu');
       }
     }
 

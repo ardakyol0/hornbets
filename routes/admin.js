@@ -65,6 +65,28 @@ router.post('/tournament', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.delete('/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    if (targetId === req.session.userId) return res.status(403).json({ success: false, error: 'Kendinizi silemezsiniz' });
+
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [targetId]);
+    if (!rows.length) return res.json({ success: false, error: 'Kullanıcı bulunamadı' });
+    if (rows[0].is_admin) return res.status(403).json({ success: false, error: 'Admin hesapları silinemez' });
+
+    if (rows[0].selected_team_id) {
+      await query('UPDATE teams SET is_available = TRUE WHERE id = $1', [rows[0].selected_team_id]);
+    }
+    await query('DELETE FROM bets WHERE user_id = $1', [targetId]);
+    await query('DELETE FROM users WHERE id = $1', [targetId]);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
 router.post('/reset-team', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { user_id } = req.body;
