@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yönetim — hornBETS</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav id="nav">
+    <a href="/dashboard" class="nav-logo">horn<span>BETS</span></a>
+    <div class="nav-links">
+      <a href="/dashboard" data-page="dashboard">Ana Sayfa</a>
+      <a href="/teams" data-page="teams">Takımlar</a>
+      <a href="/bet" data-page="bet">Bahis Yap</a>
+      <a href="/leaderboard" data-page="leaderboard">Sıralama</a>
+      <a href="/admin" data-page="admin">Yönetim</a>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Çıkış</button>
+    </div>
+    <div class="hamburger"><span></span><span></span><span></span></div>
+  </nav>
+
+  <main class="main">
+    <h1 class="page-title">⚙️ Yönetim Paneli</h1>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('users', this)">Kullanıcılar</button>
+      <button class="tab-btn" onclick="switchTab('draft', this)">Draft Yönetimi</button>
+      <button class="tab-btn" onclick="switchTab('tournament', this)">Turnuva</button>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-content active" id="tab-users">
+      <div class="card" style="padding:0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kullanıcı</th>
+                <th>Takım</th>
+                <th>Bakiye</th>
+                <th>Admin</th>
+                <th>İşlemler</th>
+              </tr>
+            </thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Draft Tab -->
+    <div class="tab-content" id="tab-draft">
+
+      <!-- Current draft status -->
+      <div class="card" style="margin-bottom:1rem" id="draft-status-card">
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;justify-content:space-between">
+          <div>
+            <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">Draft Durumu</div>
+            <div id="draft-status-label" style="font-weight:700;font-size:1.1rem">—</div>
+            <div id="draft-current-label" style="font-size:0.85rem;color:var(--text-muted);margin-top:0.25rem"></div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="startDraft()">▶ Drafti Başlat</button>
+            <button class="btn btn-outline" onclick="skipPick()">⏭ Sırayı Geç</button>
+            <button class="btn btn-danger" onclick="resetDraft()">🔄 Drafti Sıfırla</button>
+          </div>
+        </div>
+        <div id="draft-action-msg" style="margin-top:0.75rem;font-size:0.85rem"></div>
+      </div>
+
+      <!-- Draft order table -->
+      <div class="card" style="padding:0">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <h3 style="font-weight:600">Draft Sırası</h3>
+          <div style="display:flex;gap:0.5rem">
+            <button class="btn btn-outline btn-sm" onclick="shuffleDraftOrder()">🎲 Rastgele Karıştır</button>
+            <button class="btn btn-primary btn-sm" onclick="saveDraftOrder()">💾 Sırayı Kaydet</button>
+          </div>
+        </div>
+        <div style="padding:0.75rem 1rem;font-size:0.8rem;color:var(--text-muted)">
+          Her kullanıcı için sıra numarasını girin (1'den başlayarak). Kaydet butonuna basın.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:80px">Sıra No</th>
+                <th>Kullanıcı</th>
+                <th>Seçilen Takım</th>
+                <th>Durum</th>
+              </tr>
+            </thead>
+            <tbody id="draft-order-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tournament Tab -->
+    <div class="tab-content" id="tab-tournament">
+      <div class="tournament-status" id="tournament-status"></div>
+
+      <div class="card" style="margin-bottom:1rem">
+        <h3 style="font-weight:600;margin-bottom:1rem">Turnuva Durumunu Ayarla</h3>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="setStatus('draft')">📝 Taslak Yap</button>
+          <button class="btn btn-outline" onclick="setStatus('active')">▶️ Aktif Yap</button>
+          <button class="btn btn-danger" onclick="showFinishPanel()">🏆 Turnuvayı Bitir</button>
+        </div>
+        <div id="status-msg" class="success-msg" style="margin-top:0.75rem"></div>
+      </div>
+
+      <div class="card" id="finish-panel" style="display:none">
+        <h3 style="font-weight:600;margin-bottom:1rem">Kazananı Seç</h3>
+        <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem">Kazanan takımı seç. Bu takıma yapılan tüm bahisler ödenecek. Bu işlem geri alınamaz.</p>
+        <div class="form-group">
+          <label>Kazanan Takım</label>
+          <select id="winner-select">
+            <option value="">-- Kazanan takımı seç --</option>
+          </select>
+        </div>
+        <button class="btn btn-danger" onclick="finishTournament()" style="margin-top:0.5rem">Kazananı Onayla ve Öde</button>
+        <div id="finish-msg" class="success-msg" style="margin-top:0.75rem"></div>
+        <div id="finish-err" class="error-msg" style="margin-top:0.25rem"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    initNav('admin');
+    let tournamentData = null;
+    let allUsersData = [];
+
+    (async () => {
+      const meData = await apiGet('/api/auth/me');
+      if (!meData?.success || !meData.data.is_admin) {
+        window.location.href = '/dashboard'; return;
+      }
+      loadNavUser();
+      await Promise.all([loadUsers(), loadTournament(), loadTeamsForSelect(), loadDraftStatus()]);
+    })();
+
+    async function loadUsers() {
+      const data = await apiGet('/api/admin/users');
+      if (!data?.success) return;
+      allUsersData = data.data;
+      const tbody = document.getElementById('users-table');
+      tbody.innerHTML = data.data.map(u => `
+        <tr>
+          <td>
+            <div style="font-weight:600">${u.display_name}</div>
+            <div style="color:var(--text-muted);font-size:0.8rem">@${u.username}</div>
+          </td>
+          <td>${u.team_name ? `${u.flag_emoji} ${u.team_name} ${tierBadge(u.tier)}` : '<span style="color:var(--text-muted)">Takım yok</span>'}</td>
+          <td>🪙 ${Number(u.balance).toLocaleString()}</td>
+          <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : ''}</td>
+          <td>
+            ${u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="resetTeam(${u.id}, '${u.display_name}')">Takımı Sıfırla</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadTournament() {
+      const data = await apiGet('/api/admin/tournament');
+      if (!data?.success) return;
+      tournamentData = data.data;
+      renderTournamentStatus();
+    }
+
+    function renderTournamentStatus() {
+      if (!tournamentData) return;
+      const status = tournamentData.status;
+      const el = document.getElementById('tournament-status');
+      el.className = `tournament-status status-${status}`;
+      const labels = { draft: 'Taslak — Bahisler Açık', active: 'Aktif — Bahisler Kapalı', finished: 'Tamamlandı' };
+      el.innerHTML = `
+        <div class="status-dot"></div>
+        <span style="font-weight:600">${labels[status] || status}</span>
+        ${tournamentData.winner_team_id ? '<span style="color:var(--gold)">🏆 Kazanan açıklandı</span>' : ''}
+      `;
+    }
+
+    async function loadTeamsForSelect() {
+      const data = await apiGet('/api/teams');
+      if (!data?.success) return;
+      const sel = document.getElementById('winner-select');
+      data.data.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.flag_emoji} ${t.name}`;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function setStatus(status) {
+      const data = await apiPost('/api/admin/tournament', { status });
+      const msg = document.getElementById('status-msg');
+      if (data?.success) {
+        tournamentData = data.data;
+        renderTournamentStatus();
+        const statusLabels = { draft: 'Taslak', active: 'Aktif', finished: 'Tamamlandı' };
+        msg.textContent = `Turnuva durumu "${statusLabels[status] || status}" olarak ayarlandı`;
+        msg.className = 'success-msg';
+      } else {
+        msg.textContent = data?.error || 'Hata oluştu';
+        msg.className = 'error-msg';
+      }
+    }
+
+    function showFinishPanel() {
+      document.getElementById('finish-panel').style.display = 'block';
+    }
+
+    async function finishTournament() {
+      const winner_team_id = parseInt(document.getElementById('winner-select').value);
+      const err = document.getElementById('finish-err');
+      const msg = document.getElementById('finish-msg');
+      err.textContent = ''; msg.textContent = '';
+      if (!winner_team_id) { err.textContent = 'Kazanan takımı seç'; return; }
+      if (!confirm('Bu işlem turnuvayı bitirecek ve tüm kazanan bahisleri ödeyecek. Emin misin?')) return;
+
+      const data = await apiPost('/api/admin/tournament', { status: 'finished', winner_team_id });
+      if (data?.success) {
+        msg.textContent = 'Turnuva tamamlandı! Ödemeler işlendi.';
+        tournamentData = data.data;
+        renderTournamentStatus();
+        await loadUsers();
+      } else {
+        err.textContent = data?.error || 'Hata oluştu';
+      }
+    }
+
+    async function resetTeam(userId, name) {
+      if (!confirm(`${name} kullanıcısının takımı sıfırlansın mı? Yeni bir takım seçebilecekler.`)) return;
+      const data = await apiPost('/api/admin/reset-team', { user_id: userId });
+      if (data?.success) {
+        await loadUsers();
+      } else {
+        alert(data?.error || 'Takım sıfırlanırken hata oluştu');
+      }
+    }
+
+    function switchTab(tab, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+      if (tab === 'draft') loadDraftStatus();
+    }
+
+    // ── DRAFT FUNCTIONS ──────────────────────────────────────────
+
+    let draftStatusData = null;
+
+    async function loadDraftStatus() {
+      const [statusData, usersData] = await Promise.all([
+        apiGet('/api/draft/status'),
+        allUsersData.length ? Promise.resolve({ success: true, data: allUsersData }) : apiGet('/api/admin/users')
+      ]);
+      if (!statusData?.success) return;
+      draftStatusData = statusData.data;
+      if (usersData?.success && !allUsersData.length) allUsersData = usersData.data;
+      renderDraftStatus();
+      renderDraftOrderTable();
+    }
+
+    function renderDraftStatus() {
+      const d = draftStatusData;
+      if (!d) return;
+      const statusMap = { waiting: '⏳ Bekliyor', active: '🟢 Aktif', finished: '✅ Tamamlandı' };
+      document.getElementById('draft-status-label').textContent = statusMap[d.draft_status] || d.draft_status;
+      const cur = d.current_user;
+      if (d.draft_status === 'active' && cur) {
+        document.getElementById('draft-current-label').textContent =
+          `Şu an sıra: ${cur.display_name} (@${cur.username}) — ${d.draft_current_pick}. seçim`;
+      } else if (d.draft_status === 'finished') {
+        document.getElementById('draft-current-label').textContent = 'Tüm seçimler tamamlandı.';
+      } else {
+        document.getElementById('draft-current-label').textContent = 'Draft başlatılmadı.';
+      }
+    }
+
+    function renderDraftOrderTable() {
+      const tbody = document.getElementById('draft-order-table');
+      const nonAdmins = allUsersData.filter(u => !u.is_admin);
+      // sort: those with draft_order first, rest after
+      nonAdmins.sort((a, b) => {
+        if (a.draft_order && b.draft_order) return a.draft_order - b.draft_order;
+        if (a.draft_order) return -1;
+        if (b.draft_order) return 1;
+        return 0;
+      });
+
+      const currentPick = draftStatusData?.draft_current_pick;
+      const draftActive = draftStatusData?.draft_status === 'active';
+
+      tbody.innerHTML = nonAdmins.map(u => {
+        const isCurrentPick = draftActive && u.draft_order === currentPick;
+        const rowStyle = isCurrentPick ? 'background:rgba(245,197,24,0.08)' : '';
+        const pickIndicator = isCurrentPick ? ' 👈' : '';
+        const teamInfo = u.team_name
+          ? `${u.flag_emoji || ''} ${u.team_name}`
+          : '<span style="color:var(--text-muted)">—</span>';
+        const statusBadgeHtml = u.team_name
+          ? '<span class="badge badge-green">Seçti</span>'
+          : isCurrentPick
+            ? '<span class="badge badge-yellow">Seçiyor...</span>'
+            : '<span class="badge badge-gray">Bekliyor</span>';
+        return `
+          <tr style="${rowStyle}" data-user-id="${u.id}">
+            <td>
+              <input type="number" class="draft-order-input" data-user-id="${u.id}"
+                value="${u.draft_order || ''}" min="1" max="50"
+                style="width:60px;padding:0.3rem 0.5rem;font-size:0.85rem">
+              ${pickIndicator}
+            </td>
+            <td>
+              <div style="font-weight:600">${u.display_name}${pickIndicator ? ' <span style="color:var(--gold)">← Şu an bu kişi</span>' : ''}</div>
+              <div style="color:var(--text-muted);font-size:0.75rem">@${u.username}</div>
+            </td>
+            <td>${teamInfo}</td>
+            <td>${statusBadgeHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function saveDraftOrder() {
+      const inputs = document.querySelectorAll('.draft-order-input');
+      const users = [];
+      const orders = new Set();
+      for (const input of inputs) {
+        const val = parseInt(input.value);
+        if (isNaN(val) || val < 1) continue;
+        if (orders.has(val)) {
+          showDraftMsg('Aynı sıra numarası birden fazla kullanıcıya verilemez!', true);
+          return;
+        }
+        orders.add(val);
+        users.push({ id: parseInt(input.dataset.userId), draft_order: val });
+      }
+      const data = await apiPost('/api/admin/draft/order', { users });
+      if (data?.success) {
+        showDraftMsg('Sıra kaydedildi!', false);
+        await loadUsers();
+        await loadDraftStatus();
+      } else {
+        showDraftMsg(data?.error || 'Hata oluştu', true);
+      }
+    }
+
+    function shuffleDraftOrder() {
+      const inputs = document.querySelectorAll('.draft-order-input');
+      const arr = Array.from(inputs);
+      // Fisher-Yates shuffle
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i].value, arr[j].value] = [arr[j].value, arr[i].value];
+      }
+      // reassign 1..n sequentially
+      arr.forEach((inp, idx) => { inp.value = idx + 1; });
+    }
+
+    async function startDraft() {
+      if (!confirm('Draft başlatılsın mı? Kullanıcılar sırayla takım seçecek.')) return;
+      const data = await apiPost('/api/admin/draft/start', {});
+      if (data?.success) {
+        showDraftMsg('Draft başlatıldı!', false);
+        await loadDraftStatus();
+      } else {
+        showDraftMsg(data?.error || 'Hata oluştu', true);
+      }
+    }
+
+    async function skipPick() {
+      const data = await apiPost('/api/admin/draft/next', {});
+      if (data?.success) {
+        showDraftMsg('Sıra geçildi.', false);
+        await loadDraftStatus();
+      } else {
+        showDraftMsg(data?.error || 'Hata oluştu', true);
+      }
+    }
+
+    async function resetDraft() {
+      if (!confirm('Drafti sıfırlamak tüm takım seçimlerini silecek. Emin misin?')) return;
+      const data = await apiPost('/api/admin/draft/reset', {});
+      if (data?.success) {
+        showDraftMsg('Draft sıfırlandı.', false);
+        await Promise.all([loadUsers(), loadDraftStatus()]);
+      } else {
+        showDraftMsg(data?.error || 'Hata oluştu', true);
+      }
+    }
+
+    function showDraftMsg(text, isError) {
+      const el = document.getElementById('draft-action-msg');
+      el.textContent = text;
+      el.style.color = isError ? 'var(--red)' : 'var(--green)';
+      setTimeout(() => { el.textContent = ''; }, 4000);
+    }
+  </script>
+</body>
+</html>

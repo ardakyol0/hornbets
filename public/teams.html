@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Takımlar — hornBETS</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav id="nav">
+    <a href="/dashboard" class="nav-logo">horn<span>BETS</span></a>
+    <div class="nav-links">
+      <a href="/dashboard" data-page="dashboard">Ana Sayfa</a>
+      <a href="/teams" data-page="teams">Takımlar</a>
+      <a href="/bet" data-page="bet">Bahis Yap</a>
+      <a href="/leaderboard" data-page="leaderboard">Sıralama</a>
+      <span id="admin-link" style="display:none"><a href="/admin" data-page="admin">Yönetim</a></span>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Çıkış</button>
+    </div>
+    <div class="hamburger"><span></span><span></span><span></span></div>
+  </nav>
+
+  <main class="main">
+    <div id="draft-banner" style="margin-bottom:1.5rem;display:none"></div>
+
+    <h1 class="page-title">Takımını Seç</h1>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem">Turnuvada seni temsil edecek bir takım seç. Bu seçim kalıcıdır ve değiştirilemez.</p>
+
+    <div class="filter-bar">
+      <button class="filter-btn active" onclick="filterTeams('all', this)">Tüm Takımlar</button>
+      <button class="filter-btn" onclick="filterTeams(1, this)">⭐ Favoriler</button>
+      <button class="filter-btn" onclick="filterTeams(2, this)">🥈 Güçlüler</button>
+      <button class="filter-btn" onclick="filterTeams(3, this)">🐴 Sürpriz Adaylar</button>
+      <button class="filter-btn" onclick="filterTeams(4, this)">🎰 Uzak İhtimaller</button>
+    </div>
+
+    <div class="teams-grid" id="teams-grid"></div>
+  </main>
+
+  <!-- Select Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Takım Seç</div>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div id="modal-body"></div>
+      <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
+        <button class="btn btn-outline" style="flex:1" onclick="closeModal()">Vazgeç</button>
+        <button class="btn btn-primary" style="flex:1" id="modal-confirm" onclick="confirmSelect()">Seçimi Onayla</button>
+      </div>
+      <div id="modal-error" class="error-msg"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+  <script>
+    initNav('teams');
+    let allTeams = [], currentUserId = null, currentSelectedTeamId = null, pendingTeamId = null;
+    let draftStatus = null, isMyTurn = false;
+    let pollTimer = null;
+
+    (async () => {
+      const [meData, teamsData] = await Promise.all([apiGet('/api/auth/me'), apiGet('/api/teams')]);
+      if (!meData?.success) return;
+      const user = meData.data;
+      currentUserId = user.id;
+      currentSelectedTeamId = user.selected_team_id;
+      if (user.is_admin) document.getElementById('admin-link').style.display = '';
+      loadNavUser();
+
+      if (!teamsData?.success) return;
+      allTeams = teamsData.data;
+
+      await refreshDraftStatus();
+      renderTeams(allTeams);
+
+      // poll every 3 seconds
+      pollTimer = setInterval(async () => {
+        await refreshDraftStatus();
+        // also refresh team availability
+        const td = await apiGet('/api/teams');
+        if (td?.success) { allTeams = td.data; renderTeams(allTeams); }
+      }, 3000);
+    })();
+
+    async function refreshDraftStatus() {
+      const data = await apiGet('/api/draft/status');
+      if (!data?.success) return;
+      draftStatus = data.data;
+      isMyTurn = draftStatus.is_my_turn;
+      // update selected team from server (in case just selected)
+      if (draftStatus.my_selected_team_id) currentSelectedTeamId = draftStatus.my_selected_team_id;
+      renderDraftBanner();
+    }
+
+    function renderDraftBanner() {
+      const banner = document.getElementById('draft-banner');
+      if (!draftStatus) { banner.style.display = 'none'; return; }
+      banner.style.display = 'block';
+      const ds = draftStatus.draft_status;
+
+      if (currentSelectedTeamId) {
+        // already picked — silent, no banner needed
+        banner.style.display = 'none';
+        return;
+      }
+
+      if (ds === 'waiting') {
+        banner.innerHTML = `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;color:var(--text-muted);font-size:0.9rem">
+            ⏳ <strong>Draft henüz başlamadı.</strong> Admin başlatacak, bekle.
+          </div>`;
+      } else if (ds === 'finished') {
+        banner.innerHTML = `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;color:var(--text-muted);font-size:0.9rem">
+            ✅ Draft tamamlandı.
+          </div>`;
+      } else if (ds === 'active') {
+        if (isMyTurn) {
+          banner.innerHTML = `
+            <div style="background:rgba(245,197,24,0.1);border:2px solid var(--gold);border-radius:12px;padding:1.1rem 1.25rem;animation:pulseGold 1.5s infinite">
+              🎯 <strong style="color:var(--gold);font-size:1.05rem">Sıra sende!</strong>
+              <span style="color:var(--text-muted);margin-left:0.5rem;font-size:0.9rem">Takımını seç ve seçimini onayla.</span>
+            </div>`;
+        } else {
+          const cur = draftStatus.current_user;
+          const myPos = draftStatus.my_draft_order;
+          const currentPick = draftStatus.draft_current_pick;
+          const ordered = draftStatus.ordered_users || [];
+          // find remaining picks before mine
+          const remaining = ordered.filter(u => !u.selected_team_id && u.draft_order >= currentPick && u.draft_order < myPos);
+          const waitCount = remaining.length;
+          banner.innerHTML = `
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;font-size:0.9rem">
+              🕐 Şu an sıra: <strong>${cur ? cur.display_name : '—'}</strong>
+              ${myPos ? `&nbsp;·&nbsp; Sen <strong>${myPos}. sıradasın</strong>${waitCount > 0 ? ` · Önünde ${waitCount} kişi var` : ''}` : ''}
+            </div>`;
+        }
+      }
+    }
+
+    function renderTeams(teams) {
+      const grid = document.getElementById('teams-grid');
+      if (!teams.length) { grid.innerHTML = '<p style="color:var(--text-muted)">Takım bulunamadı.</p>'; return; }
+      grid.innerHTML = teams.map(t => {
+        const isMyTeam = t.id === currentSelectedTeamId;
+        const isTaken = !t.is_available && !isMyTeam;
+        const classes = ['team-card', isTaken ? 'taken' : '', isMyTeam ? 'selected-by-me' : ''].join(' ');
+        return `
+          <div class="${classes}" onclick="${isTaken ? '' : isMyTeam ? '' : `openModal(${t.id})`}" data-tier="${t.tier}">
+            ${isTaken ? '<span class="taken-label">Alındı</span>' : ''}
+            ${isMyTeam ? '<span class="taken-label" style="background:rgba(245,197,24,0.2);color:var(--gold)">Takımın</span>' : ''}
+            <div class="team-flag">${t.flag_emoji}</div>
+            <div class="team-name">${t.name}</div>
+            <div class="team-odds">${t.odds_american}</div>
+            <div class="team-prob">${t.win_probability_pct}% ihtimal</div>
+            <div style="margin-top:0.5rem">${tierBadge(t.tier)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterTeams(tier, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filtered = tier === 'all' ? allTeams : allTeams.filter(t => t.tier === tier);
+      renderTeams(filtered);
+    }
+
+    function openModal(teamId) {
+      if (currentSelectedTeamId) { alert('Zaten bir takımın var!'); return; }
+      // Draft gate
+      if (draftStatus) {
+        const ds = draftStatus.draft_status;
+        if (ds === 'waiting') { alert('Draft henüz başlamadı. Admin başlatacak.'); return; }
+        if (ds === 'finished') { alert('Draft tamamlandı.'); return; }
+        if (ds === 'active' && !isMyTurn) { alert('Şu an sıra sende değil!'); return; }
+      }
+      const team = allTeams.find(t => t.id === teamId);
+      if (!team) return;
+      pendingTeamId = teamId;
+      document.getElementById('modal-title').textContent = `${team.name} Seç`;
+      document.getElementById('modal-body').innerHTML = `
+        <div style="text-align:center;padding:1rem 0">
+          <div style="font-size:3rem;margin-bottom:0.5rem">${team.flag_emoji}</div>
+          <div style="font-size:1.3rem;font-weight:700;margin-bottom:0.25rem">${team.name}</div>
+          <div style="color:var(--text-muted);font-size:0.9rem;margin-bottom:0.75rem">${team.odds_american} · ${team.win_probability_pct}% kazanma ihtimali</div>
+          ${tierBadge(team.tier)}
+        </div>
+        <p style="color:var(--text-muted);font-size:0.85rem;text-align:center;margin-top:1rem">
+          Bu seçim kalıcıdır. Onayladıktan sonra takımını değiştiremezsin.
+        </p>
+      `;
+      document.getElementById('modal-error').textContent = '';
+      document.getElementById('modal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.remove('open');
+      pendingTeamId = null;
+    }
+
+    async function confirmSelect() {
+      if (!pendingTeamId) return;
+      document.getElementById('modal-confirm').disabled = true;
+      const data = await apiPost('/api/teams/select', { team_id: pendingTeamId });
+      document.getElementById('modal-confirm').disabled = false;
+      if (!data) return;
+      if (data.success) {
+        currentSelectedTeamId = pendingTeamId;
+        closeModal();
+        await refreshDraftStatus();
+        const teamsData = await apiGet('/api/teams');
+        if (teamsData?.success) { allTeams = teamsData.data; renderTeams(allTeams); }
+      } else {
+        document.getElementById('modal-error').textContent = data.error;
+      }
+    }
+
+    document.getElementById('modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('modal')) closeModal();
+    });
+  </script>
+</body>
+</html>

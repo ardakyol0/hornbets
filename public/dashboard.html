@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ana Sayfa — hornBETS</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav id="nav">
+    <a href="/dashboard" class="nav-logo">horn<span>BETS</span></a>
+    <div class="nav-links">
+      <a href="/dashboard" data-page="dashboard">Ana Sayfa</a>
+      <a href="/teams" data-page="teams">Takımlar</a>
+      <a href="/bet" data-page="bet">Bahis Yap</a>
+      <a href="/leaderboard" data-page="leaderboard">Sıralama</a>
+      <span id="admin-link" style="display:none"><a href="/admin" data-page="admin">Yönetim</a></span>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Çıkış</button>
+    </div>
+    <div class="hamburger">
+      <span></span><span></span><span></span>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div id="team-banner" style="display:none"></div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Bakiye</div>
+        <div class="stat-value gold" id="stat-balance">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Takımın</div>
+        <div class="stat-value" id="stat-team" style="font-size:1.1rem">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Toplam Bahis</div>
+        <div class="stat-value" id="stat-bets">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Olası Kazanç</div>
+        <div class="stat-value green" id="stat-payout">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:1.25rem">Bahislerim</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Takım</th>
+              <th>Miktar</th>
+              <th>Olası Kazanç</th>
+              <th>Durum</th>
+              <th>Tarih</th>
+            </tr>
+          </thead>
+          <tbody id="bets-table"></tbody>
+        </table>
+        <div id="bets-empty" class="empty-state" style="display:none">
+          <div class="icon">🎲</div>
+          <p>Henüz bahis yok. <a href="/bet" style="color:var(--gold)">İlk bahsini yap</a></p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    initNav('dashboard');
+
+    (async () => {
+      const [meData, betsData] = await Promise.all([
+        apiGet('/api/auth/me'),
+        apiGet('/api/bets')
+      ]);
+
+      if (!meData || !meData.success) return;
+      const user = meData.data;
+
+      if (user.is_admin) document.getElementById('admin-link').style.display = '';
+      loadNavUser();
+
+      document.getElementById('stat-balance').textContent = '🪙 ' + user.balance.toLocaleString();
+
+      if (user.selected_team_id) {
+        const teamsData = await apiGet('/api/teams');
+        const team = teamsData?.data?.find(t => t.id === user.selected_team_id);
+        if (team) {
+          document.getElementById('stat-team').textContent = `${team.flag_emoji} ${team.name}`;
+          const banner = document.getElementById('team-banner');
+          banner.style.display = 'flex';
+          banner.className = 'team-banner';
+          banner.innerHTML = `
+            <div class="team-banner-flag">${team.flag_emoji}</div>
+            <div class="team-banner-info">
+              <div class="team-banner-name">${team.name}</div>
+              <div class="team-banner-meta">${team.odds_american} · ${team.win_probability_pct}% kazanma ihtimali · ${tierBadge(team.tier)}</div>
+            </div>
+            <a href="/teams" class="btn btn-outline btn-sm">Takım Değiştir</a>
+          `;
+        }
+      } else {
+        document.getElementById('stat-team').innerHTML = `<a href="/teams" style="color:var(--gold);font-size:0.85rem">Takım seç →</a>`;
+      }
+
+      if (!betsData || !betsData.success) return;
+      const bets = betsData.data;
+
+      const totalBet = bets.reduce((s, b) => s + b.amount, 0);
+      const totalPayout = bets.reduce((s, b) => s + b.potential_payout, 0);
+      document.getElementById('stat-bets').textContent = bets.length;
+      document.getElementById('stat-payout').textContent = '🪙 ' + totalPayout.toLocaleString();
+
+      const tbody = document.getElementById('bets-table');
+      if (bets.length === 0) {
+        document.getElementById('bets-empty').style.display = 'block';
+      } else {
+        tbody.innerHTML = bets.map(b => `
+          <tr>
+            <td>${b.flag_emoji} ${b.team_name}</td>
+            <td>🪙 ${b.amount.toLocaleString()}</td>
+            <td>🪙 ${b.potential_payout.toLocaleString()}</td>
+            <td>${statusBadge(b.status)}</td>
+            <td style="color:var(--text-muted);font-size:0.8rem">${new Date(b.placed_at).toLocaleDateString()}</td>
+          </tr>
+        `).join('');
+      }
+    })();
+  </script>
+</body>
+</html>

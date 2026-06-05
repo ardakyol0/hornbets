@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sıralama — hornBETS</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav id="nav">
+    <a href="/dashboard" class="nav-logo">horn<span>BETS</span></a>
+    <div class="nav-links">
+      <a href="/dashboard" data-page="dashboard">Ana Sayfa</a>
+      <a href="/teams" data-page="teams">Takımlar</a>
+      <a href="/bet" data-page="bet">Bahis Yap</a>
+      <a href="/leaderboard" data-page="leaderboard">Sıralama</a>
+      <span id="admin-link" style="display:none"><a href="/admin" data-page="admin">Yönetim</a></span>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Çıkış</button>
+    </div>
+    <div class="hamburger"><span></span><span></span><span></span></div>
+  </nav>
+
+  <main class="main">
+    <h1 class="page-title">🏆 Sıralama</h1>
+
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:60px">Sıra</th>
+              <th>Oyuncu</th>
+              <th>Takım</th>
+              <th>Oran</th>
+              <th>Kazanma %</th>
+              <th>Toplam Bahis</th>
+              <th>Olası Kazanç</th>
+              <th>Bakiye</th>
+            </tr>
+          </thead>
+          <tbody id="lb-table"></tbody>
+        </table>
+        <div id="lb-empty" class="empty-state" style="display:none">
+          <div class="icon">👥</div>
+          <p>Henüz oyuncu yok.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    initNav('leaderboard');
+
+    (async () => {
+      const [meData, lbData] = await Promise.all([apiGet('/api/auth/me'), apiGet('/api/leaderboard')]);
+      if (!meData?.success) return;
+      if (meData.data.is_admin) document.getElementById('admin-link').style.display = '';
+      loadNavUser();
+
+      if (!lbData?.success) return;
+      const rows = lbData.data;
+      const tbody = document.getElementById('lb-table');
+
+      if (rows.length === 0) {
+        document.getElementById('lb-empty').style.display = 'block';
+        return;
+      }
+
+      tbody.innerHTML = rows.map((p, i) => {
+        const rank = i + 1;
+        const rankClass = rank <= 3 ? `rank-${rank}` : 'rank-other';
+        const initials = p.display_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        const teamInfo = p.team_name
+          ? `<span style="margin-right:0.4rem">${p.flag_emoji}</span>${p.team_name}`
+          : '<span style="color:var(--text-muted)">Takım yok</span>';
+        const isMe = p.id === meData.data.id;
+        return `
+          <tr style="${isMe ? 'background:rgba(245,197,24,0.04)' : ''}">
+            <td><div class="rank-badge ${rankClass}">${rank}</div></td>
+            <td>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="avatar">${initials}</div>
+                <div>
+                  <div style="font-weight:600">${p.display_name}${isMe ? ' <span style="color:var(--gold);font-size:0.75rem">(sen)</span>' : ''}</div>
+                  <div style="color:var(--text-muted);font-size:0.75rem">@${p.username}</div>
+                </div>
+              </div>
+            </td>
+            <td>${teamInfo}</td>
+            <td style="color:var(--gold)">${p.odds_american || '—'}</td>
+            <td>${p.win_probability_pct ? p.win_probability_pct + '%' : '—'}</td>
+            <td>🪙 ${Number(p.total_bet).toLocaleString()}</td>
+            <td style="color:var(--green)">🪙 ${Number(p.total_payout).toLocaleString()}</td>
+            <td>🪙 ${Number(p.balance).toLocaleString()}</td>
+          </tr>
+        `;
+      }).join('');
+    })();
+  </script>
+</body>
+</html>

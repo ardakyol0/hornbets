@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hornBETS — FIFA Dünya Kupası 2026</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">horn<span>BETS</span></div>
+      <div class="auth-subtitle">FIFA Dünya Kupası 2026 · Özel Bahis Platformu</div>
+
+      <div id="login-form">
+        <div class="form-group">
+          <label>Kullanıcı Adı</label>
+          <input type="text" id="login-username" placeholder="Kullanıcı adını gir" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Şifre</label>
+          <input type="password" id="login-password" placeholder="Şifreni gir" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="login()">Giriş Yap</button>
+        <div id="login-error" class="error-msg"></div>
+        <div class="auth-footer">
+          Hesabın yok mu? <a href="#" onclick="showRegister()">Kayıt Ol</a>
+        </div>
+      </div>
+
+      <div id="register-form" style="display:none">
+        <div class="form-group">
+          <label>Görünen Ad</label>
+          <input type="text" id="reg-display" placeholder="Adın">
+        </div>
+        <div class="form-group">
+          <label>Kullanıcı Adı</label>
+          <input type="text" id="reg-username" placeholder="Bir kullanıcı adı seç" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Şifre</label>
+          <input type="password" id="reg-password" placeholder="Bir şifre seç" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="register()">Hesap Oluştur</button>
+        <div id="reg-error" class="error-msg"></div>
+        <div id="reg-success" class="success-msg"></div>
+        <div class="auth-footer">
+          Zaten hesabın var mı? <a href="#" onclick="showLogin()">Giriş Yap</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      if (data.success) window.location.href = '/dashboard';
+    })();
+
+    function showRegister() {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('register-form').style.display = 'block';
+    }
+
+    function showLogin() {
+      document.getElementById('register-form').style.display = 'none';
+      document.getElementById('login-form').style.display = 'block';
+    }
+
+    async function login() {
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      const err = document.getElementById('login-error');
+      err.textContent = '';
+      if (!username || !password) { err.textContent = 'Lütfen tüm alanları doldur'; return; }
+      const res = await fetch('/api/auth/login', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = data.data.is_admin ? '/admin' : '/dashboard';
+      } else {
+        err.textContent = data.error;
+      }
+    }
+
+    async function register() {
+      const display_name = document.getElementById('reg-display').value.trim();
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const err = document.getElementById('reg-error');
+      const suc = document.getElementById('reg-success');
+      err.textContent = ''; suc.textContent = '';
+      if (!display_name || !username || !password) { err.textContent = 'Lütfen tüm alanları doldur'; return; }
+      const res = await fetch('/api/auth/register', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, display_name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = '/dashboard';
+      } else {
+        err.textContent = data.error;
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (document.getElementById('login-form').style.display !== 'none') login();
+        else register();
+      }
+    });
+  </script>
+</body>
+</html>

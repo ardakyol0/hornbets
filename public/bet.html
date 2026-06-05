@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bahis Yap — hornBETS</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav id="nav">
+    <a href="/dashboard" class="nav-logo">horn<span>BETS</span></a>
+    <div class="nav-links">
+      <a href="/dashboard" data-page="dashboard">Ana Sayfa</a>
+      <a href="/teams" data-page="teams">Takımlar</a>
+      <a href="/bet" data-page="bet">Bahis Yap</a>
+      <a href="/leaderboard" data-page="leaderboard">Sıralama</a>
+      <span id="admin-link" style="display:none"><a href="/admin" data-page="admin">Yönetim</a></span>
+    </div>
+    <div class="nav-user">
+      <span id="nav-user"></span>
+      <button class="btn btn-outline btn-sm" onclick="logout()">Çıkış</button>
+    </div>
+    <div class="hamburger"><span></span><span></span><span></span></div>
+  </nav>
+
+  <main class="main">
+    <h1 class="page-title">Bahis Yap</h1>
+
+    <div id="betting-closed" style="display:none" class="card">
+      <p style="color:var(--warning);text-align:center;padding:1rem">⚠️ Bahisler şu an kapalı. Turnuva başladı.</p>
+    </div>
+
+    <div id="betting-open">
+      <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center">
+        <div class="search-bar" style="flex:1;min-width:200px">
+          <input type="text" id="search" placeholder="Takım ara..." oninput="filterBetTeams()">
+        </div>
+        <div class="filter-bar" style="margin:0">
+          <button class="filter-btn active" onclick="filterBetTier('all', this)">Tümü</button>
+          <button class="filter-btn" onclick="filterBetTier(1, this)">⭐ Favoriler</button>
+          <button class="filter-btn" onclick="filterBetTier(2, this)">🥈 Güçlüler</button>
+          <button class="filter-btn" onclick="filterBetTier(3, this)">🐴 Sürpriz Adaylar</button>
+          <button class="filter-btn" onclick="filterBetTier(4, this)">🎰 Uzak İhtimaller</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:1.5rem;align-items:start">
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Takım</th>
+                  <th>Oran</th>
+                  <th>Kazanma %</th>
+                  <th>Seviye</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="bet-table"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="bet-slip">
+          <h3 style="font-size:1rem;font-weight:600;margin-bottom:1.25rem">Bahis Kuponu</h3>
+          <div id="no-selection" style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem 0">
+            Bahis kuponu açmak için bir takıma tıkla
+          </div>
+          <div id="slip-content" style="display:none">
+            <div style="text-align:center;margin-bottom:1.25rem">
+              <div id="slip-flag" style="font-size:2rem;margin-bottom:0.25rem"></div>
+              <div id="slip-name" style="font-weight:700;font-size:1.1rem"></div>
+              <div id="slip-odds" style="color:var(--text-muted);font-size:0.85rem;margin-top:0.25rem"></div>
+            </div>
+            <div class="form-group">
+              <label>Bahis Miktarı (coin)</label>
+              <input type="number" id="bet-amount" placeholder="0" min="1" oninput="updatePayout()">
+              <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.4rem">Bakiye: 🪙 <span id="slip-balance">—</span></div>
+            </div>
+            <div class="payout-preview">
+              <div>
+                <div class="payout-label">Olası Kazanç</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)" id="slip-multiplier"></div>
+              </div>
+              <div class="payout-amount" id="payout-preview">🪙 0</div>
+            </div>
+            <button class="btn btn-primary" style="width:100%" onclick="placeBet()">Bahis Yap</button>
+            <div id="bet-error" class="error-msg"></div>
+            <div id="bet-success" class="success-msg"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    initNav('bet');
+    let allTeams = [], activeFilter = 'all', selectedTeam = null, userBalance = 0;
+
+    (async () => {
+      const [meData, teamsData, tournamentData] = await Promise.all([
+        apiGet('/api/auth/me'),
+        apiGet('/api/teams'),
+        apiGet('/api/admin/tournament').catch(() => null)
+      ]);
+
+      if (!meData?.success) return;
+      const user = meData.data;
+      userBalance = user.balance;
+      if (user.is_admin) document.getElementById('admin-link').style.display = '';
+      loadNavUser();
+      document.getElementById('slip-balance').textContent = userBalance.toLocaleString();
+
+      if (!teamsData?.success) return;
+      allTeams = teamsData.data;
+      renderBetTable(allTeams);
+    })();
+
+    function renderBetTable(teams) {
+      const tbody = document.getElementById('bet-table');
+      tbody.innerHTML = teams.map(t => `
+        <tr onclick="selectTeam(${t.id})" style="cursor:pointer" id="row-${t.id}">
+          <td><span style="margin-right:0.5rem">${t.flag_emoji}</span>${t.name}</td>
+          <td style="color:var(--gold)">${t.odds_american}</td>
+          <td style="color:var(--text-muted)">${t.win_probability_pct}%</td>
+          <td>${tierBadge(t.tier)}</td>
+          <td><button class="btn btn-outline btn-sm">Bahis</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function filterBetTier(tier, btn) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = tier;
+      filterBetTeams();
+    }
+
+    function filterBetTeams() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const filtered = allTeams.filter(t => {
+        const matchTier = activeFilter === 'all' || t.tier === activeFilter;
+        const matchSearch = t.name.toLowerCase().includes(q);
+        return matchTier && matchSearch;
+      });
+      renderBetTable(filtered);
+    }
+
+    function selectTeam(teamId) {
+      selectedTeam = allTeams.find(t => t.id === teamId);
+      if (!selectedTeam) return;
+      document.getElementById('no-selection').style.display = 'none';
+      document.getElementById('slip-content').style.display = 'block';
+      document.getElementById('slip-flag').textContent = selectedTeam.flag_emoji;
+      document.getElementById('slip-name').textContent = selectedTeam.name;
+      document.getElementById('slip-odds').textContent = `${selectedTeam.odds_american} · ×${selectedTeam.odds_decimal}`;
+      document.getElementById('slip-multiplier').textContent = `×${selectedTeam.odds_decimal} ondalık oran`;
+      document.getElementById('bet-amount').value = '';
+      document.getElementById('payout-preview').textContent = '🪙 0';
+      document.getElementById('bet-error').textContent = '';
+      document.getElementById('bet-success').textContent = '';
+    }
+
+    function updatePayout() {
+      const amount = parseFloat(document.getElementById('bet-amount').value) || 0;
+      if (!selectedTeam) return;
+      const payout = (amount * selectedTeam.odds_decimal).toFixed(2);
+      document.getElementById('payout-preview').textContent = '🪙 ' + parseFloat(payout).toLocaleString();
+    }
+
+    async function placeBet() {
+      const amount = parseFloat(document.getElementById('bet-amount').value);
+      const err = document.getElementById('bet-error');
+      const suc = document.getElementById('bet-success');
+      err.textContent = ''; suc.textContent = '';
+      if (!selectedTeam) { err.textContent = 'Önce bir takım seç'; return; }
+      if (!amount || amount <= 0) { err.textContent = 'Geçerli bir miktar gir'; return; }
+      if (amount > userBalance) { err.textContent = 'Yetersiz bakiye'; return; }
+
+      const data = await apiPost('/api/bets', { team_id: selectedTeam.id, amount });
+      if (!data) return;
+      if (data.success) {
+        userBalance -= amount;
+        document.getElementById('slip-balance').textContent = userBalance.toLocaleString();
+        document.getElementById('nav-user').innerHTML = `<span>hornBETS</span> <span class="balance">🪙 ${userBalance.toLocaleString()}</span>`;
+        suc.textContent = `Bahis yapıldı! Olası kazanç: 🪙 ${data.data.potential_payout.toLocaleString()}`;
+        document.getElementById('bet-amount').value = '';
+        document.getElementById('payout-preview').textContent = '🪙 0';
+        loadNavUser();
+      } else {
+        err.textContent = data.error;
+      }
+    }
+  </script>
+</body>
+</html>

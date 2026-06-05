@@ -1,0 +1,19 @@
+{
+  "name": "hornbets",
+  "version": "1.0.0",
+  "description": "Private FIFA World Cup 2026 betting platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "pg": "^8.21.0"
+  }
+}
