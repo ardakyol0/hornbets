@@ -26,8 +26,8 @@
   <main class="main">
     <div id="draft-banner" style="margin-bottom:1.5rem;display:none"></div>
 
-    <h1 class="page-title">Takımını Seç</h1>
-    <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem">Turnuvada seni temsil edecek bir takım seç. Bu seçim kalıcıdır ve değiştirilemez.</p>
+    <h1 class="page-title">Takımlar</h1>
+    <p style="color:var(--text-muted);margin-bottom:1.5rem;font-size:0.9rem">Tüm takımları ve oranları görüntüle. Takım seçimi yalnızca draft sıran geldiğinde yapılabilir.</p>
 
     <div class="filter-bar">
       <button class="filter-btn active" onclick="filterTeams('all', this)">Tüm Takımlar</button>
@@ -50,7 +50,7 @@
       <div id="modal-body"></div>
       <div style="display:flex;gap:0.75rem;margin-top:1.25rem">
         <button class="btn btn-outline" style="flex:1" onclick="closeModal()">Vazgeç</button>
-        <button class="btn btn-primary" style="flex:1" id="modal-confirm" onclick="confirmSelect()">Seçimi Onayla</button>
+        <button class="btn btn-primary" style="flex:1" id="modal-confirm" onclick="confirmSelect()">✅ Bu Takımı Seç</button>
       </div>
       <div id="modal-error" class="error-msg"></div>
     </div>
@@ -149,9 +149,11 @@
       grid.innerHTML = teams.map(t => {
         const isMyTeam = t.id === currentSelectedTeamId;
         const isTaken = !t.is_available && !isMyTeam;
-        const classes = ['team-card', isTaken ? 'taken' : '', isMyTeam ? 'selected-by-me' : ''].join(' ');
+        // clickable only when it's the user's draft turn, they have no team yet, and this team is available
+        const canSelect = isMyTurn && !currentSelectedTeamId && !isTaken;
+        const classes = ['team-card', isTaken ? 'taken' : '', isMyTeam ? 'selected-by-me' : '', canSelect ? 'selectable' : ''].join(' ');
         return `
-          <div class="${classes}" onclick="${isTaken ? '' : isMyTeam ? '' : `openModal(${t.id})`}" data-tier="${t.tier}">
+          <div class="${classes}" onclick="${canSelect ? `openModal(${t.id})` : ''}" data-tier="${t.tier}">
             ${isTaken ? '<span class="taken-label">Alındı</span>' : ''}
             ${isMyTeam ? '<span class="taken-label" style="background:rgba(245,197,24,0.2);color:var(--gold)">Takımın</span>' : ''}
             <div class="team-flag">${t.flag_emoji}</div>
@@ -172,14 +174,8 @@
     }
 
     function openModal(teamId) {
-      if (currentSelectedTeamId) { alert('Zaten bir takımın var!'); return; }
-      // Draft gate
-      if (draftStatus) {
-        const ds = draftStatus.draft_status;
-        if (ds === 'waiting') { alert('Draft henüz başlamadı. Admin başlatacak.'); return; }
-        if (ds === 'finished') { alert('Draft tamamlandı.'); return; }
-        if (ds === 'active' && !isMyTurn) { alert('Şu an sıra sende değil!'); return; }
-      }
+      if (currentSelectedTeamId) return;
+      if (!isMyTurn) return;
       const team = allTeams.find(t => t.id === teamId);
       if (!team) return;
       pendingTeamId = teamId;

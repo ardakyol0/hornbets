@@ -177,7 +177,10 @@ tr:hover td { background: #1a1a1a; }
   text-align: center;
   position: relative;
 }
-.team-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+.team-card { cursor: default; }
+.team-card.selectable { cursor: pointer; }
+.team-card.selectable:hover { border-color: var(--gold); transform: translateY(-2px); }
+.team-card:not(.selectable):not(.taken):hover { transform: none; border-color: var(--border); }
 .team-card.taken { opacity: 0.4; cursor: not-allowed; }
 .team-card.taken:hover { transform: none; border-color: var(--border); }
 .team-card.selected-by-me { border-color: var(--gold); background: rgba(245, 197, 24, 0.05); }

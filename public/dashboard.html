@@ -102,11 +102,18 @@
               <div class="team-banner-name">${team.name}</div>
               <div class="team-banner-meta">${team.odds_american} · ${team.win_probability_pct}% kazanma ihtimali · ${tierBadge(team.tier)}</div>
             </div>
-            <a href="/teams" class="btn btn-outline btn-sm">Takım Değiştir</a>
           `;
         }
       } else {
-        document.getElementById('stat-team').innerHTML = `<a href="/teams" style="color:var(--gold);font-size:0.85rem">Takım seç →</a>`;
+        document.getElementById('stat-team').innerHTML = `<span style="color:var(--text-muted);font-size:0.8rem">Bekleniyor</span>`;
+        const banner = document.getElementById('team-banner');
+        banner.style.display = 'block';
+        banner.innerHTML = `
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;color:var(--text-muted);font-size:0.9rem;margin-bottom:1.5rem">
+            ⏳ <strong>Draft bekleniyor</strong> — Admin drafti başlatınca sıran geldiğinde
+            <a href="/teams" style="color:var(--gold)">takımını seçebileceksin</a>.
+          </div>
+        `;
       }
 
       if (!betsData || !betsData.success) return;
