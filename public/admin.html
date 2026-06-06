@@ -168,6 +168,25 @@
     </div>
   </main>
 
+  <!-- Team Select Modal -->
+  <div id="team-select-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center">
+    <div class="card" style="width:380px;padding:1.5rem;position:relative">
+      <button onclick="closeTeamSelectModal()" style="position:absolute;top:0.75rem;right:1rem;background:none;border:none;color:var(--text-muted);font-size:1.25rem;cursor:pointer">✕</button>
+      <h3 style="font-weight:600;margin-bottom:0.25rem">Takım Seç</h3>
+      <div id="team-select-modal-name" style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem"></div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label style="font-size:0.85rem">Arama</label>
+        <input type="text" id="team-search-input" placeholder="Takım ara..." oninput="filterTeamOptions()" style="width:100%;margin-top:0.4rem">
+      </div>
+      <div class="form-group" style="margin-bottom:0.75rem">
+        <label style="font-size:0.85rem">Takım</label>
+        <select id="team-select-dropdown" size="8" style="width:100%;margin-top:0.4rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0.25rem"></select>
+      </div>
+      <div id="team-select-err" class="error-msg" style="margin-bottom:0.5rem"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="confirmTeamSelect()">Takımı Ata</button>
+    </div>
+  </div>
+
   <!-- Coin Modal -->
   <div id="coin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
     <div class="card" style="width:340px;padding:1.5rem;position:relative">
@@ -217,6 +236,7 @@
           <td>${u.is_admin ? '<span class="badge badge-gold">Admin</span>' : ''}</td>
           <td style="display:flex;gap:0.5rem;flex-wrap:wrap">
             ${!u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="openCoinModal(${u.id}, '${u.display_name.replace(/'/g, "\\'")}', ${u.balance})">Coin Düzenle</button>` : ''}
+            ${!u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="openTeamSelectModal(${u.id}, '${u.display_name.replace(/'/g, "\\'")}')">Takım Seç</button>` : ''}
             ${u.team_name && !u.is_admin ? `<button class="btn btn-outline btn-sm" onclick="resetTeam(${u.id}, '${u.display_name.replace(/'/g, "\\'")}')">Takımı Sıfırla</button>` : ''}
             ${!u.is_admin ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${u.display_name.replace(/'/g, "\\'")}')">Sil</button>` : ''}
           </td>
@@ -323,6 +343,60 @@
       if (tab === 'draft') loadDraftStatus();
       if (tab === 'bets') loadBets();
     }
+
+    // ── TEAM SELECT MODAL ────────────────────────────────────────
+    let teamSelectUserId = null;
+    let allAvailableTeams = [];
+
+    async function openTeamSelectModal(userId, name) {
+      teamSelectUserId = userId;
+      document.getElementById('team-select-modal-name').textContent = name + ' için takım seç';
+      document.getElementById('team-select-err').textContent = '';
+      document.getElementById('team-search-input').value = '';
+
+      const data = await apiGet('/api/teams');
+      allAvailableTeams = (data?.data || []).filter(t => t.is_available);
+      renderTeamOptions(allAvailableTeams);
+
+      const modal = document.getElementById('team-select-modal');
+      modal.style.display = 'flex';
+    }
+
+    function renderTeamOptions(teams) {
+      const sel = document.getElementById('team-select-dropdown');
+      const tierLabels = { 1: 'Favori', 2: 'Rakip', 3: 'Karanlık At', 4: 'Uzun İhtimal' };
+      sel.innerHTML = teams.map(t =>
+        `<option value="${t.id}">${t.flag_emoji} ${t.name} — ${tierLabels[t.tier] || ''} (${t.odds_american})</option>`
+      ).join('');
+    }
+
+    function filterTeamOptions() {
+      const q = document.getElementById('team-search-input').value.toLowerCase();
+      renderTeamOptions(allAvailableTeams.filter(t => t.name.toLowerCase().includes(q)));
+    }
+
+    function closeTeamSelectModal() {
+      document.getElementById('team-select-modal').style.display = 'none';
+      teamSelectUserId = null;
+    }
+
+    async function confirmTeamSelect() {
+      const sel = document.getElementById('team-select-dropdown');
+      const err = document.getElementById('team-select-err');
+      err.textContent = '';
+      if (!sel.value) { err.textContent = 'Bir takım seç'; return; }
+      const data = await apiPost(`/api/admin/users/${teamSelectUserId}/select-team`, { team_id: parseInt(sel.value) });
+      if (data?.success) {
+        closeTeamSelectModal();
+        await loadUsers();
+      } else {
+        err.textContent = data?.error || 'Hata oluştu';
+      }
+    }
+
+    document.getElementById('team-select-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeTeamSelectModal();
+    });
 
     // ── COIN MODAL ───────────────────────────────────────────────
     let coinModalUserId = null;

@@ -107,6 +107,37 @@ router.post('/reset-team', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.post('/users/:id/select-team', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const { team_id } = req.body;
+    if (!team_id) return res.json({ success: false, error: 'team_id gerekli' });
+
+    const { rows: userRows } = await query('SELECT * FROM users WHERE id = $1', [targetId]);
+    if (!userRows.length) return res.json({ success: false, error: 'Kullanıcı bulunamadı' });
+    const user = userRows[0];
+    if (user.selected_team_id) return res.json({ success: false, error: 'Kullanıcının zaten bir takımı var' });
+
+    const { rows: teamRows } = await query('SELECT * FROM teams WHERE id = $1 AND is_available = TRUE', [team_id]);
+    if (!teamRows.length) return res.json({ success: false, error: 'Bu takım mevcut değil' });
+
+    await query('UPDATE users SET selected_team_id = $1 WHERE id = $2', [team_id, targetId]);
+    await query('UPDATE teams SET is_available = FALSE WHERE id = $1', [team_id]);
+
+    const { rows: tourRows } = await query('SELECT * FROM tournament WHERE id = 1');
+    const tournament = tourRows[0];
+    if (tournament?.draft_status === 'active' && user.draft_order != null) {
+      const { advanceToNextPick } = require('./draft');
+      await advanceToNextPick(user.draft_order);
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, error: 'Sunucu hatası' });
+  }
+});
+
 router.post('/users/:id/balance', requireAuth, requireAdmin, async (req, res) => {
   try {
     const targetId = parseInt(req.params.id);
