@@ -74,10 +74,20 @@
         <div id="draft-action-msg" style="margin-top:0.75rem;font-size:0.85rem"></div>
       </div>
 
+      <!-- Draft order ranked list -->
+      <div class="card" style="padding:0;margin-bottom:1rem">
+        <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
+          <h3 style="font-weight:600">Draft Sıralaması</h3>
+        </div>
+        <div id="draft-ranked-list" style="padding:0">
+          <div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.9rem">Henüz draft sırası belirlenmedi</div>
+        </div>
+      </div>
+
       <!-- Draft order table -->
       <div class="card" style="padding:0">
         <div style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-          <h3 style="font-weight:600">Draft Sırası</h3>
+          <h3 style="font-weight:600">Draft Sırası Düzenle</h3>
           <div style="display:flex;gap:0.5rem">
             <button class="btn btn-outline btn-sm" onclick="shuffleDraftOrder()">🎲 Rastgele Karıştır</button>
             <button class="btn btn-primary btn-sm" onclick="saveDraftOrder()">💾 Sırayı Kaydet</button>
@@ -406,6 +416,7 @@
       draftStatusData = statusData.data;
       if (usersData?.success && !allUsersData.length) allUsersData = usersData.data;
       renderDraftStatus();
+      renderDraftRankedList();
       renderDraftOrderTable();
     }
 
@@ -423,6 +434,40 @@
       } else {
         document.getElementById('draft-current-label').textContent = 'Draft başlatılmadı.';
       }
+    }
+
+    function renderDraftRankedList() {
+      const el = document.getElementById('draft-ranked-list');
+      const ordered = (draftStatusData?.ordered_users || []);
+      if (!ordered.length) {
+        el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:var(--text-muted);font-size:0.9rem">Henüz draft sırası belirlenmedi</div>';
+        return;
+      }
+      const currentPick = draftStatusData?.draft_current_pick;
+      const draftActive = draftStatusData?.draft_status === 'active';
+      el.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th style="width:60px">Sıra</th>
+              <th>Kullanıcı Adı</th>
+              <th>Görünen İsim</th>
+              <th>Seçilen Takım</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${ordered.map(u => {
+              const isCurrent = draftActive && u.draft_order === currentPick;
+              return `<tr style="${isCurrent ? 'background:rgba(245,197,24,0.08)' : ''}">
+                <td style="font-weight:700;color:var(--gold)">${u.draft_order}</td>
+                <td style="color:var(--text-muted)">@${u.username}${isCurrent ? ' <span style="color:var(--gold);font-size:0.75rem">← şu an</span>' : ''}</td>
+                <td style="font-weight:600">${u.display_name}</td>
+                <td>${u.team_name ? `${u.flag_emoji} ${u.team_name}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
     }
 
     function renderDraftOrderTable() {

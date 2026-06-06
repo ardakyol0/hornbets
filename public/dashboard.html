@@ -48,6 +48,11 @@
       </div>
     </div>
 
+    <div class="card" id="draft-order-card">
+      <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:1.25rem">Draft Sıralaması</h2>
+      <div id="draft-order-content"></div>
+    </div>
+
     <div class="card">
       <h2 style="font-size:1.1rem;font-weight:600;margin-bottom:1.25rem">Bahislerim</h2>
       <div class="table-wrap">
@@ -76,9 +81,10 @@
     initNav('dashboard');
 
     (async () => {
-      const [meData, betsData] = await Promise.all([
+      const [meData, betsData, draftData] = await Promise.all([
         apiGet('/api/auth/me'),
-        apiGet('/api/bets')
+        apiGet('/api/bets'),
+        apiGet('/api/draft/status')
       ]);
 
       if (!meData || !meData.success) return;
@@ -115,6 +121,43 @@
             <a href="/teams" style="color:var(--gold)">takımını seçebileceksin</a>.
           </div>
         `;
+      }
+
+      // Draft sıralaması
+      const draftEl = document.getElementById('draft-order-content');
+      if (draftData?.success) {
+        const { draft_status, ordered_users, draft_current_pick } = draftData.data;
+        if (draft_status === 'waiting' || !ordered_users?.length) {
+          draftEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.9rem;padding:0.5rem 0">⏳ Admin henüz draft sırasını belirlemedi</div>`;
+        } else {
+          let html = '';
+          if (draft_status === 'finished') {
+            html += `<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:0.6rem 1rem;margin-bottom:1rem;color:var(--green);font-size:0.9rem;font-weight:600">✅ Draft tamamlandı</div>`;
+          }
+          html += `<div class="table-wrap"><table>
+            <thead><tr><th style="width:50px">Sıra</th><th>Kullanıcı</th><th>Seçilen Takım</th></tr></thead>
+            <tbody>
+              ${ordered_users.map(u => {
+                const isMe = u.id === user.id;
+                const isCurrent = draft_status === 'active' && u.draft_order === draft_current_pick;
+                const rowStyle = isMe
+                  ? 'background:rgba(245,197,24,0.1);outline:1px solid rgba(245,197,24,0.3)'
+                  : isCurrent
+                    ? 'background:rgba(245,197,24,0.05)'
+                    : '';
+                return `<tr style="${rowStyle}">
+                  <td style="font-weight:700;color:var(--gold)">${u.draft_order}</td>
+                  <td>
+                    <span style="font-weight:600${isMe ? ';color:var(--gold)' : ''}">${u.display_name}${isMe ? ' (sen)' : ''}</span>
+                    ${isCurrent ? '<span style="color:var(--gold);font-size:0.75rem;margin-left:0.4rem">← seçiyor</span>' : ''}
+                  </td>
+                  <td>${u.team_name ? `${u.flag_emoji} ${u.team_name}` : '<span style="color:var(--text-muted)">—</span>'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table></div>`;
+          draftEl.innerHTML = html;
+        }
       }
 
       if (!betsData || !betsData.success) return;
